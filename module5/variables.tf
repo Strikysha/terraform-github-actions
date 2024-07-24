@@ -1,5 +1,8 @@
-variable "admin_password" {
-  description = "The password for the VM"
-  type        = string
-  sensitive   = true
+variable "rg_locations" {
+  description = "The locations of the resource group"
+}
+
+
+variable "app_service_locations" {
+  description = "The locations of the app service"
 }

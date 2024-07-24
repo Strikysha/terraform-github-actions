@@ -1,126 +1,40 @@
 locals {
-  acronym = "yury-lab-04-1"
+  acronym = "yury-lab-05"
 }
 
-resource "azurerm_resource_group" "example" {
-  name     = "rg-${local.acronym}"
-  location = "West Europe"
+module "resource_group" {
+  for_each = var.rg_locations
+
+  source = "./modules/resource_group"
+
+  location = each.value.location
+  name     = "rg-${local.acronym}-${each.key}"
 }
 
-resource "azurerm_virtual_network" "example" {
-  name                = "vnet-${local.acronym}"
-  address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-}
+module "app_service_plan" {
+  for_each = var.app_service_locations
 
-resource "azurerm_subnet" "example" {
-  name                 = "subnet-${local.acronym}"
-  resource_group_name  = azurerm_resource_group.example.name
-  virtual_network_name = azurerm_virtual_network.example.name
-  address_prefixes     = ["10.0.0.0/24"]
+  source = "./modules/app_service_plan"
 
-}
-
-resource "azurerm_network_interface" "example" {
-  name                = "nic-${local.acronym}"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.example.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.example.id
-  }
-}
-
-resource "azurerm_linux_virtual_machine" "example" {
-  name                            = "vm-${local.acronym}"
-  resource_group_name             = azurerm_resource_group.example.name
-  location                        = azurerm_resource_group.example.location
-  size                            = "Standard_B1ms"
-  admin_username                  = "adminuser"
-  admin_password                  = var.admin_password
-  disable_password_authentication = false
-
-  network_interface_ids = [
-    azurerm_network_interface.example.id,
-  ]
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts"
-    version   = "latest"
-  }
+  name                = "plan-${local.acronym}-${each.key}"
+  resource_group_name = module.resource_group[each.key].name
+  location            = module.resource_group[each.key].location
+  sku_name            = each.value.sku_name
+  os_type             = each.value.os_type
 }
 
 
-resource "azurerm_public_ip" "example" {
-  name                = "pip-${local.acronym}"
-  resource_group_name = azurerm_resource_group.example.name
-  location            = azurerm_resource_group.example.location
-  allocation_method   = "Static"
-  domain_name_label   = "yuryvaskaboinikau"
-}
+module "web_app" {
+  for_each = var.app_service_locations
 
+  source = "./modules/app_service"
 
-resource "azurerm_network_security_group" "example" {
-  name                = "nsg-${local.acronym}"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
+  name                = "app-${local.acronym}-${each.key}"
+  resource_group_name = module.resource_group[each.key].name
+  location            = module.resource_group[each.key].location
+  service_plan_id     = module.app_service_plan[each.key].id
 
-  security_rule {
-    name                       = "ssh"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-  security_rule {
-    name                       = "http"
-    priority                   = 101
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-}
-
-resource "azurerm_network_interface_security_group_association" "example" {
-  network_security_group_id = azurerm_network_security_group.example.id
-  network_interface_id      = azurerm_network_interface.example.id
-}
-
-resource "null_resource" "install_nginx" {
-  triggers = {
-    host = azurerm_linux_virtual_machine.example.public_ip_address
-  }
-
-  connection {
-    type     = "ssh"
-    user     = "adminuser"
-    password = var.admin_password
-    host     = azurerm_linux_virtual_machine.example.public_ip_address
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt-get update",
-      "sudo apt-get install -y nginx"
-    ]
+  site_config = {
+    worker_count = lookup(each.value, "worker_count", 1)
   }
 }

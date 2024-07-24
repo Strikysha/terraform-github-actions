@@ -9,13 +9,13 @@ terraform {
       version = "3.2.2"
     }
   }
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-github-actions-state"
-    storage_account_name = "terraformghactionsvya01"
-    container_name       = "tfstate"
-    key                  = "terraform-lab-4.tfstate"
-    use_oidc             = true
-  }
+  # backend "azurerm" {
+  #   resource_group_name  = "rg-terraform-github-actions-state"
+  #   storage_account_name = "terraformghactionsvya01"
+  #   container_name       = "tfstate"
+  #   key                  = "terraform-lab-5.tfstate"
+  #   use_oidc             = true
+  # }
 }
 
 provider "azurerm" {
